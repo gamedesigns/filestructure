@@ -1,0 +1,27 @@
+loot_box_game/
+├── Cargo.toml
+└── src/
+    ├── main.rs
+    ├── plugins/
+    │   ├── player_plugin.rs
+    │   ├── loot_box_plugin.rs
+    │   ├── item_plugin.rs
+    │   ├── leveling_plugin.rs
+    │   └── ui_plugin.rs
+    ├── components/
+    │   ├── player_components.rs
+    │   ├── loot_box_components.rs
+    │   └── item_components.rs
+    ├── resources/
+    │   ├── hall_of_fame.rs
+    │   └── loot_box_pool.rs
+    ├── systems/
+    │   ├── generate_loot_boxes.rs
+    │   ├── choose_loot_box.rs
+    │   ├── open_loot_box.rs
+    │   ├── equip_item.rs
+    │   ├── sell_item.rs
+    │   ├── level_up.rs
+    │   └── update_hall_of_fame.rs
+    └── utils/
+        └── rarity.rs
