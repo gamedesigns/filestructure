@@ -1,8 +1,16 @@
-```markdown
 # File Structure Utility
 
-Utility to create file and folder structure from input project outline `.json`.
+Utility to create file and folder structure from input project outline in tree format.
 
+```sh
+maindir_game/
+├── Cargo.toml
+└── src/
+    ├── main.rs
+    ├── plugins/
+    │   ├── player_plugin.rs
+
+```
 ## Example Usages
 
 ### Normal Usage (with Confirmation)
@@ -33,4 +41,3 @@ When you run the script, it will:
 2. Preview the proposed project structure
 3. Ask for confirmation (unless `-y` is used)
 4. Create the project structure in the specified or current directory
-```
