@@ -1,115 +1,247 @@
 import os
+import json
+import re
 import argparse
 
-def create_directory(path):
-    try:
-        os.makedirs(path, exist_ok=True)
-        print(f"Created directory: {path}")
-    except OSError as e:
-        print(f"Error creating directory {path}: {e}")
+class ProjectStructureParser:
+    def __init__(self, encoding='utf-8'):
+        """
+        Initialize the project structure parser.
+        
+        :param encoding: File encoding to use when reading the input file
+        """
+        self.encoding = encoding
 
-def create_file(path):
-    try:
-        with open(path, 'w', encoding='utf-8') as file:
-            pass  # Create an empty file
-        print(f"Created file: {path}")
-    except OSError as e:
-        print(f"Error creating file {path}: {e}")
+    def parse_structure(self, input_file):
+        """
+        Parse a text file representing a directory structure.
+        
+        :param input_file: Path to the input text file
+        :return: Nested dictionary representing the project structure
+        """
+        with open(input_file, 'r', encoding=self.encoding) as f:
+            lines = f.readlines()
+        
+        # Remove empty lines and trailing whitespaces
+        lines = [line.rstrip() for line in lines if line.strip()]
+        
+        return self._build_structure_dict(lines)
 
-def parse_line(line):
-    line = line.expandtabs()
-    i = 0
-    depth = 0
-    while i < len(line):
-        if line[i] == '│':
-            if line[i:i+4] == '│   ':
-                depth += 1
-                i += 4
+    def _build_structure_dict(self, lines):
+        """
+        Recursively build a nested dictionary from tree-style lines.
+        
+        :param lines: List of lines representing the directory structure
+        :return: Nested dictionary 
+        """
+        # Extract the root directory name
+        root_name = lines[0].rstrip('/').strip()
+        root_dict = {root_name: {}}
+        current_dict = root_dict[root_name]
+        
+        # Track the current path and hierarchy
+        hierarchy_stack = [current_dict]
+        current_hierarchy = []
+        
+        # Remove the root line and tree symbols from subsequent lines
+        cleaned_lines = []
+        for line in lines[1:]:
+            # Remove tree symbols (├, └, │, ─)
+            cleaned = re.sub(r'^[│├└─\s]+', '', line).strip()
+            if cleaned:
+                cleaned_lines.append(cleaned)
+        
+        for line in cleaned_lines:
+            # Determine if it's a directory or file
+            is_dir = line.endswith('/')
+            
+            # Clean the line (remove trailing /)
+            clean_line = line.rstrip('/')
+            
+            if is_dir:
+                # It's a directory
+                # Adjust hierarchy based on depth
+                while current_hierarchy and not self._is_parent_dir(current_hierarchy[-1], clean_line):
+                    current_hierarchy.pop()
+                    hierarchy_stack.pop()
+                
+                # Create or navigate to the directory
+                current_location = hierarchy_stack[-1]
+                current_location[clean_line] = {}
+                
+                # Update hierarchy
+                current_hierarchy.append(clean_line)
+                hierarchy_stack.append(current_location[clean_line])
             else:
-                i += 1
-        elif line[i] in '├└':
-            depth += 1
-            if line[i:i+3] in ['├──', '└──']:
-                i += 3
+                # It's a file
+                # Place the file in the current directory
+                current_location = hierarchy_stack[-1]
+                current_location[clean_line] = None
+        
+        return root_dict
+
+    def _is_parent_dir(self, parent, child):
+        """
+        Check if parent is a parent directory of child.
+        
+        :param parent: Parent directory name
+        :param child: Potential child directory name
+        :return: Boolean indicating if parent is a parent directory
+        """
+        # Simple implementation - in more complex scenarios, this might need refinement
+        return child.startswith(parent) and child != parent
+
+    def generate_json(self, input_file, output_file=None):
+        """
+        Generate JSON specification from the input text file.
+        
+        :param input_file: Path to the input text file
+        :param output_file: Optional path to save the JSON file
+        :return: JSON representation of the project structure
+        """
+        # Parse the structure
+        structure = self.parse_structure(input_file)
+        
+        # Convert to JSON
+        json_str = json.dumps(structure, indent=4)
+        
+        # Save to file if output path is provided
+        if output_file:
+            with open(output_file, 'w', encoding=self.encoding) as f:
+                f.write(json_str)
+        
+        return json_str
+
+class ProjectStructureCreator:
+    @staticmethod
+    def create_project_structure(tree_spec, base_path=None, confirm=True):
+        """
+        Create a project folder and file structure based on a dictionary specification.
+        
+        :param tree_spec: Dictionary representing the folder/file structure
+        :param base_path: Base directory where the structure will be created
+        :param confirm: Whether to ask for user confirmation before creating
+        """
+        # Determine the base path
+        if base_path is None:
+            base_path = os.getcwd()
+        
+        # Find the root directory name (first key in the dictionary)
+        if len(tree_spec) != 1:
+            raise ValueError("Input structure should have a single root directory")
+        
+        root_name = list(tree_spec.keys())[0]
+        root_structure = tree_spec[root_name]
+        full_path = os.path.join(base_path, root_name)
+        
+        # Preview the structure
+        print("Proposed Project Structure:")
+        ProjectStructureCreator._preview_structure(root_structure, root_name)
+        
+        # Ask for confirmation if enabled
+        if confirm:
+            response = input(f"\nCreate project structure in '{full_path}'? (y/n): ").lower().strip()
+            if response != 'y':
+                print("Project creation cancelled.")
+                return
+        
+        # Create the structure
+        def create_path(path_parts, is_file=False):
+            full_path = os.path.join(base_path, *path_parts)
+            if is_file:
+                # Ensure parent directory exists
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                # Create empty file
+                open(full_path, 'a').close()
             else:
-                i += 1
-        else:
-            break
-    name = line[i:].strip()
-    name = name.lstrip('├└─│ ')
-    return depth, name
+                os.makedirs(full_path, exist_ok=True)
 
-def parse_tree_lines(text):
-    lines = text.strip().split('\n')
-    for line in lines:
-        depth, name = parse_line(line)
-        yield depth, name
+        def process_tree(current_tree, current_path=None):
+            current_path = current_path or [root_name]
+            
+            for name, content in current_tree.items():
+                full_path = current_path + [name]
+                
+                if isinstance(content, dict):
+                    # This is a directory
+                    create_path(full_path)
+                    # Recursively process subdirectories
+                    process_tree(content, full_path)
+                elif content is None:
+                    # This is an empty file
+                    create_path(full_path, is_file=True)
+                elif isinstance(content, str):
+                    # This is a file with optional initial content
+                    create_path(full_path, is_file=True)
+                    file_path = os.path.join(base_path, *full_path)
+                    with open(file_path, 'w') as f:
+                        f.write(content)
 
-def parse_structure(text):
-    structure = []
-    stack = [('', 0)]  # (path, depth)
-    for depth, name in parse_tree_lines(text):
-        while stack and stack[-1][1] >= depth:
-            stack.pop()
-        parent_path = stack[-1][0] if stack else ''
-        full_path = os.path.join(parent_path, name)
-        is_dir = name.endswith('/')
-        structure.append(('dir' if is_dir else 'file', full_path))
-        if is_dir:
-            stack.append((full_path, depth))
-    return structure
+        # Validate input
+        if not isinstance(root_structure, dict):
+            raise ValueError("Tree specification must be a dictionary")
+
+        # Create the structure
+        process_tree(root_structure)
+        print(f"\nProject structure created in '{full_path}'")
+
+    @staticmethod
+    def _preview_structure(structure, root_name, indent=''):
+        """
+        Print a preview of the project structure.
+        
+        :param structure: Dictionary representing the project structure
+        :param root_name: Name of the root directory
+        :param indent: Current indentation level
+        """
+        print(f"{indent}{root_name}/")
+        next_indent = indent + '    '
+        
+        for name, content in structure.items():
+            if content is None:
+                # File
+                print(f"{next_indent}{name}")
+            elif isinstance(content, dict):
+                # Directory
+                print(f"{next_indent}{name}/")
+                ProjectStructureCreator._preview_structure(content, name, next_indent)
 
 def main():
-    print("FileStructure Creator v1.0")
-    print("This program creates a file and folder structure based on a description in a text file.")
-    print()
-
-    parser = argparse.ArgumentParser(description="Create project directory structure.")
-    parser.add_argument("base_dir", nargs='?', default=os.path.dirname(os.path.abspath(__file__)), help="Base directory for the project.")
-    parser.add_argument("--file", default="structure.txt", help="Path to the text file describing the structure.")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
+    # Argument parsing
+    parser = argparse.ArgumentParser(description='Create project folder structure')
+    parser.add_argument('input_file', help='Text file with project structure specification')
+    parser.add_argument('-d', '--directory', 
+                        help='Base directory to create project structure (default: current directory)')
+    parser.add_argument('-j', '--json-output', 
+                        help='Optional output path for generated JSON specification')
+    parser.add_argument('-e', '--encoding', default='utf-8',
+                        help='File encoding (default: utf-8)')
+    parser.add_argument('-y', '--yes', action='store_true',
+                        help='Skip confirmation and create project structure')
     args = parser.parse_args()
 
-    base_dir = args.base_dir
-    file_path = args.file
-    verbose = args.verbose
-
     try:
-        with open(file_path, 'r', encoding='utf-8-sig') as file:
-            text_structure = file.read()
-    except FileNotFoundError:
-        print(f"Error: File not found: {file_path}")
-        return
-    except IOError as e:
-        print(f"Error: {e}")
-        return
+        # Initialize parser with specified encoding
+        parser = ProjectStructureParser(encoding=args.encoding)
+        
+        # Generate JSON (optionally save to file)
+        json_spec = parser.generate_json(args.input_file, args.json_output)
+        
+        # Parse JSON specification and create project structure
+        tree_spec = json.loads(json_spec)
+        
+        # Determine base directory
+        base_dir = args.directory or os.getcwd()
+        
+        # Create project structure
+        ProjectStructureCreator.create_project_structure(
+            tree_spec, 
+            base_path=base_dir, 
+            confirm=not args.yes
+        )
+    
+    except Exception as e:
+        print(f"Error creating project structure: {e}")
 
-    structure = parse_structure(text_structure)
-
-    # Ensure the root directory is included
-    root_dir = os.path.join(base_dir, 'loot_box_game')
-    create_directory(root_dir)
-
-    # Build full paths relative to the root directory
-    full_structure = [(item_type, os.path.join(root_dir, path.lstrip('loot_box_game/'))) for item_type, path in structure]
-
-    # Print the list of items to be created
-    print("The following directories and files will be created:")
-    for item_type, path in full_structure:
-        print(f"- {path}")
-
-    # Ask for user confirmation
-    confirmation = input("Proceed? [y/N]: ")
-    if confirmation.lower() not in ['y', 'yes']:
-        print("Operation aborted.")
-        return
-
-    # Create directories and files
-    for item_type, path in full_structure:
-        if item_type == 'dir':
-            create_directory(path)
-        elif item_type == 'file':
-            create_file(path)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
