@@ -186,15 +186,23 @@ class ProjectStructureCreator:
         print(f"\nProject structure created in '{full_path}'")
 
     @staticmethod
-    def _preview_structure(structure, root_name, indent=''):
+    def _preview_structure(structure, root_name, indent='', printed_dirs=None):
         """
         Print a preview of the project structure.
         
         :param structure: Dictionary representing the project structure
         :param root_name: Name of the root directory
         :param indent: Current indentation level
+        :param printed_dirs: Set to track printed directories and avoid duplicates
         """
-        print(f"{indent}{root_name}/")
+        if printed_dirs is None:
+            printed_dirs = set()
+
+        # Only print root name if it hasn't been printed before
+        if root_name not in printed_dirs:
+            print(f"{indent}{root_name}/")
+            printed_dirs.add(root_name)
+        
         next_indent = indent + '    '
         
         for name, content in structure.items():
@@ -202,9 +210,13 @@ class ProjectStructureCreator:
                 # File
                 print(f"{next_indent}{name}")
             elif isinstance(content, dict):
-                # Directory
-                print(f"{next_indent}{name}/")
-                ProjectStructureCreator._preview_structure(content, name, next_indent)
+                # Prevent duplicating directory names in the preview
+                if name not in printed_dirs:
+                    print(f"{next_indent}{name}/")
+                    printed_dirs.add(name)
+                
+                # Recursively preview subdirectories
+                ProjectStructureCreator._preview_structure(content, name, next_indent, printed_dirs)
 
 def main():
     # Argument parsing
