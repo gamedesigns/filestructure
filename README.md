@@ -15,22 +15,22 @@ maindir_game/
 
 ### Normal Usage (with Confirmation)
 ```sh
-python project_structure_generator.py project_structure.txt
+python filestructure.py project_structure.txt
 ```
 
 ### Skip Confirmation
 ```sh
-python project_structure_generator.py project_structure.txt -y
+python filestructure.py project_structure.txt -y
 ```
 
 ### Specify a Different Base Directory
 ```sh
-python project_structure_generator.py project_structure.txt -d /path/to/projects
+python filestructure.py project_structure.txt -d /path/to/projects
 ```
 
 ### Save JSON Specification
 ```sh
-python project_structure_generator.py project_structure.txt -j project_spec.json
+python filestructure.py project_structure.txt -j project_spec.json
 ```
 
 ## Script Execution
